@@ -1,0 +1,14 @@
+# 忽略build目录
+build/
+dist/
+out/
+
+# 忽略VS Code目录
+.vscode/
+
+# 忽略node_modules（如果有的话）
+temp/
+
+# 忽略系统文件
+.DS_Store
+Thumbs.db
