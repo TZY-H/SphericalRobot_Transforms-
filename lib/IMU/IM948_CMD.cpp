@@ -1498,7 +1498,7 @@ void IM948::stop()
 void IM948::communication_loop()
 {
 
-    auto period = std::chrono::milliseconds(20);
+    auto period = std::chrono::milliseconds(10);
     auto next_time = std::chrono::high_resolution_clock::now();
     while (running)
     {

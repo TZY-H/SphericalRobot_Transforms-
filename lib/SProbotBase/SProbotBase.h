@@ -42,7 +42,7 @@ private:
     std::atomic<double> speed_R{0.0};
 
     // 转速计算参数
-    static constexpr double PULSES_PER_REVOLUTION = 75.0 * 44.0; // 根据实际编码器设置
+    static constexpr double PULSES_PER_REVOLUTION = 75.0 * 44.0 / 6.2831853; // 根据实际编码器设置
     static constexpr double UPDATE_INTERVAL = 0.01;              // 10ms更新间隔
     // 接收缓冲区
     std::string receive_buffer;
@@ -126,12 +126,12 @@ private:
     double goal_pitch = 0; // rad
     double goal_roll = 0;  // rad
 
-    double goal_vx = 0; // m/s
-    double goal_wz = 0; // m/s
 
     int32_t dogtime = 0;
 
 public:
+    double goal_vx = 0; // m/s
+    double goal_wz = 0; // rad/s
 
 
     SMS_STS sm_st;

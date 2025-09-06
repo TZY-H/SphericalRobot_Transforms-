@@ -145,7 +145,7 @@ speed_t SerialMotorController::get_baud_rate(int baud_rate)
 }
 void SerialMotorController::communication_loop()
 {
-    auto period = std::chrono::milliseconds(20);
+    auto period = std::chrono::milliseconds(10);
     auto next_time = std::chrono::high_resolution_clock::now();
 
     while (running)
@@ -340,7 +340,7 @@ void SerialMotorController::calculate_speed()
 
     // 转速 = 脉冲数/更新时间/每转脉冲数 (单位: 转/秒)
     double speed_L_new = delta_L / UPDATE_INTERVAL / PULSES_PER_REVOLUTION;
-    speed_L = speed_L_new;
+    speed_L = 0.15 * speed_L_new + 0.85 * speed_L;
     last_Encoder_L = Encoder_L.load();
 
     // 计算右电机转速
@@ -352,7 +352,7 @@ void SerialMotorController::calculate_speed()
         delta_R += 65536;
 
     double speed_R_new = delta_R / UPDATE_INTERVAL / PULSES_PER_REVOLUTION;
-    speed_R = speed_R_new;
+    speed_R = 0.15 * speed_R_new + 0.85 * speed_R;
     last_Encoder_R = Encoder_R.load();
 }
 
@@ -426,22 +426,29 @@ SProbot::~SProbot()
 void SProbot::ctrl_loop()
 {
 
-    PIDController vx_pid(2.5, 1.0, 0, 20.0f);
-    vx_pid.setOutputLimits(-1.57 * 0.7, 1.57 * 0.7); // PWM范围
-    vx_pid.setIntegralLimits(-1.57, 1.57);
+    // PIDController pitch_pid(0.5, 1.0, 0, 10.0f);
+    // pitch_pid.setOutputLimits(-1.0, 1.0);
+    // pitch_pid.setIntegralLimits(-2.0, 2.0);
+    PIDController vxVib_pid(0.20, 0, 0, 10.0f); // 震荡抑制
+    vxVib_pid.enableIntegral(false);
+    vxVib_pid.enableDerivative(false);
+    vxVib_pid.setOutputLimits(-0.4, 0.4);
+    vxVib_pid.setDeadband(0.3);
+    // vxVib_pid.setIntegralLimits(-2.0, 2.0);
 
-    PIDController pitch_pid(0.5, 1.0, 0, 20.0f);
-    pitch_pid.setOutputLimits(-1.0, 1.0);
-    pitch_pid.setIntegralLimits(-2.0, 2.0);
+    PIDController SL_pid(3.50, 4.0, 0, 10.0f);
+    SL_pid.setOutputLimits(-1.0, 1.0);
+    SL_pid.setIntegralLimits(-1.5, 1.5);
 
-    PIDController wz_pid(0.5, 1.0, 0, 20.0f);
-    wz_pid.setOutputLimits(-1.0, 1.0);
-    wz_pid.setIntegralLimits(-1.0, 1.0);
+    PIDController SR_pid(3.50, 4.0, 0, 10.0f);
+    SR_pid.setOutputLimits(-1.0, 1.0);
+    SR_pid.setIntegralLimits(-1.5, 1.5);
 
-    auto period = std::chrono::milliseconds(20);
+    auto period = std::chrono::milliseconds(10);
     auto next_time = std::chrono::high_resolution_clock::now();
     uint8_t mod_old = -1;
-
+    std::cout << "running!!" << std::endl;
+    int32_t count = 0;
     while (running)
     {
         next_time += period;
@@ -452,9 +459,9 @@ void SProbot::ctrl_loop()
             case 0:
                 break;
             case 1:
-                vx_pid.reset();
-                pitch_pid.reset();
-                wz_pid.reset();
+                vxVib_pid.reset();
+                SL_pid.reset();
+                SR_pid.reset();
                 break;
             case 2:
                 break;
@@ -469,13 +476,46 @@ void SProbot::ctrl_loop()
             break;
         case 1:
         {
-            double pwm_l = 0, pwm_r = 0;
-            double wz_now = imu948.angular_vel_z;
-            double wz_out = wz_pid.compute(wz_now);
-            pwm_l -= wz_now;
-            pwm_r += wz_now;
+            vxVib_pid.setSetpoint(0);
+            double pitch_w = imu948.angular_vel_y;
+            double vxVib_out = vxVib_pid.compute(pitch_w);
 
-            controller.setPWM(pwm_l, pwm_r, PWM_PL, PWM_PR);
+            double goal_vl = goal_vx - goal_wz * 0.154 / 2.0;
+            double goal_vr = goal_vx + goal_wz * 0.154 / 2.0;
+            SL_pid.setSetpoint(goal_vl);
+            SR_pid.setSetpoint(goal_vr);
+
+            double vl_now = controller.getSpeedL() * 0.1;
+            double vr_now = controller.getSpeedR() * 0.1;
+            double vl_out = SL_pid.compute(vl_now);
+            double vr_out = SR_pid.compute(vr_now);
+
+            double pwm_l = 0, pwm_r = 0;
+
+            pwm_l += (vl_out + vxVib_out);
+            pwm_r += (vr_out + vxVib_out);
+
+            double temp = std::max(std::abs(pwm_l), std::abs(pwm_r));
+            if (temp > 1)
+            {
+                pwm_l /= temp;
+                pwm_r /= temp;
+            }
+            controller.setPWM(pwm_l * 3500, pwm_r * 3500, PWM_PL * 3500, PWM_PR * 3500);
+
+            if (++count % 10 == 0)
+            {
+                double vx_now = (controller.getSpeedR() + controller.getSpeedL()) / 2;
+                double wz_now = (controller.getSpeedR() - controller.getSpeedL()) * 0.1 / 0.154;
+                std::cout
+                    // << "goal_vl: " << goal_vl
+                    // << ", goal_vr: " << goal_vr
+                    << ", pwm_l: " << pwm_l
+                    << ", pwm_r: " << pwm_r
+                    << ", pitch_w: " << pitch_w
+                    << ", vxVib_out: " << vxVib_out
+                    << std::endl;
+            }
         }
         break;
         case 2:
@@ -486,4 +526,5 @@ void SProbot::ctrl_loop()
 
         std::this_thread::sleep_until(next_time);
     }
+    std::cout << "end!!" << std::endl;
 }
