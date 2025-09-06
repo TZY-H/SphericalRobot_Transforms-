@@ -19,7 +19,8 @@ uint8_t updata_key = 0;
 uint8_t mod = 0;
 double speed_X = 0;
 double speed_R = 0;
-double speed_P = 0;
+double speed_Pl = 0;
+double speed_Pr = 0;
 double tilt = 0;
 
 // JSON解析回调函数
@@ -40,7 +41,8 @@ void onMessageReceived(const std::string &message, const std::string &ip, int po
             json &data = jsonData["speed"];
             speed_X = data[0];
             speed_R = data[1];
-            speed_P = data[2];
+            speed_Pl = data[2];
+            speed_Pr = data[3];
             key = 1;
         }
         if (jsonData.contains("mod"))
@@ -100,8 +102,8 @@ int main()
             updata_key = 0;
             robot.goal_vx = speed_X;
             robot.goal_wz = speed_R;
-            robot.PWM_PL = speed_P;
-            robot.PWM_PR = 0.9 * speed_P;
+            robot.PWM_PL = speed_Pl;
+            robot.PWM_PR = speed_Pr;
             robot.goal_tilt = tilt;
             // int16_t PWM_WL = (int16_t)(speed_X * scale);
             // int16_t PWM_WR = (int16_t)(speed_X * scale);

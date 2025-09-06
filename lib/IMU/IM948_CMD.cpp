@@ -1500,11 +1500,11 @@ void IM948::communication_loop()
 
     auto period = std::chrono::milliseconds(10);
     auto next_time = std::chrono::high_resolution_clock::now();
+    char buffer[1024];
     while (running)
     {
         next_time += period;
 
-        char buffer[256];
         ssize_t bytes_read = read(serial_fd, buffer, sizeof(buffer) - 1);
         for (ssize_t i = 0; i < bytes_read; i++)
         {

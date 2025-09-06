@@ -430,13 +430,13 @@ void SProbot::ctrl_loop()
     wxVib_pid.enableIntegral(false);
     wxVib_pid.enableDerivative(false);
     wxVib_pid.setOutputLimits(-0.4, 0.4);
-    wxVib_pid.setDeadband(0.3);
+    wxVib_pid.setDeadband(0.25);
 
     PIDController vxVib_pid(0.20, 0, 0, 10.0f); // 震荡抑制
     vxVib_pid.enableIntegral(false);
     vxVib_pid.enableDerivative(false);
     vxVib_pid.setOutputLimits(-0.4, 0.4);
-    vxVib_pid.setDeadband(0.3);
+    vxVib_pid.setDeadband(0.25);
 
     PIDController SL_pid(3.50, 4.0, 0, 10.0f);
     SL_pid.setOutputLimits(-1.0, 1.0);
@@ -555,12 +555,27 @@ void SProbot::ctrl_loop()
 
             wxVib_pid.setSetpoint(0);
             double roll_w = imu948.angular_vel_x;
-            double wxVib_out = 0;//wxVib_pid.compute(roll_w);
+            double wxVib_out = wxVib_pid.compute(roll_w);
 
-            double tilt = wxVib_out + goal_tilt;
+            double tilt = std::min(std::max(goal_tilt - wxVib_out, -1.57), 1.57);
             int16_t tiltAngle = tilt * (4095 / 6.28) + 2047;
 
             sm_st.WritePos(1, tiltAngle, 100, 500);
+            if (++count % 10 == 0)
+            {
+                // double vx_now = (controller.getSpeedR() + controller.getSpeedL()) / 2;
+                // double wz_now = (controller.getSpeedR() - controller.getSpeedL()) * 0.1 / 0.154;
+                std::cout
+                    // << "goal_vl: " << goal_vl
+                    // << ", goal_vr: " << goal_vr
+                    // << ", pwm_l: " << pwm_l
+                    // << ", pwm_r: " << pwm_r
+                    << ", pitch_w: " << pitch_w
+                    << ", vxVib_out: " << vxVib_out
+                    << ", roll_w: " << roll_w
+                    << ", wxVib_out: " << wxVib_out
+                    << std::endl;
+            }
         }
         break;
         case 3:
