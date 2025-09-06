@@ -132,6 +132,7 @@ private:
 public:
     double goal_vx = 0; // m/s
     double goal_wz = 0; // rad/s
+    double goal_tilt = 0; // rad
 
 
     SMS_STS sm_st;

@@ -426,15 +426,17 @@ SProbot::~SProbot()
 void SProbot::ctrl_loop()
 {
 
-    // PIDController pitch_pid(0.5, 1.0, 0, 10.0f);
-    // pitch_pid.setOutputLimits(-1.0, 1.0);
-    // pitch_pid.setIntegralLimits(-2.0, 2.0);
+    PIDController wxVib_pid(0.20, 0, 0, 10.0f); // 震荡抑制
+    wxVib_pid.enableIntegral(false);
+    wxVib_pid.enableDerivative(false);
+    wxVib_pid.setOutputLimits(-0.4, 0.4);
+    wxVib_pid.setDeadband(0.3);
+
     PIDController vxVib_pid(0.20, 0, 0, 10.0f); // 震荡抑制
     vxVib_pid.enableIntegral(false);
     vxVib_pid.enableDerivative(false);
     vxVib_pid.setOutputLimits(-0.4, 0.4);
     vxVib_pid.setDeadband(0.3);
-    // vxVib_pid.setIntegralLimits(-2.0, 2.0);
 
     PIDController SL_pid(3.50, 4.0, 0, 10.0f);
     SL_pid.setOutputLimits(-1.0, 1.0);
@@ -443,6 +445,16 @@ void SProbot::ctrl_loop()
     PIDController SR_pid(3.50, 4.0, 0, 10.0f);
     SR_pid.setOutputLimits(-1.0, 1.0);
     SR_pid.setIntegralLimits(-1.5, 1.5);
+
+    // 1: 二轮差速
+    // 速度环   (SL_pid+SR_pid)/2
+    // 角速度环 (SR_pid-SL_pid)/R
+    // 速度方向震荡抑制环 vxVib_pid
+
+    // 2: 陆地球
+    // 速度环   SL_pid
+    // 速度方向震荡抑制环 vxVib_pid
+    // 侧边倾角震荡抑制环 wxVib_pid
 
     auto period = std::chrono::milliseconds(10);
     auto next_time = std::chrono::high_resolution_clock::now();
@@ -464,6 +476,9 @@ void SProbot::ctrl_loop()
                 SR_pid.reset();
                 break;
             case 2:
+                vxVib_pid.reset();
+                SL_pid.reset();
+                wxVib_pid.reset();
                 break;
             case 3:
                 break;
@@ -519,7 +534,35 @@ void SProbot::ctrl_loop()
         }
         break;
         case 2:
-            break;
+        {
+            vxVib_pid.setSetpoint(0);
+            double pitch_w = imu948.angular_vel_y;
+            double vxVib_out = vxVib_pid.compute(pitch_w);
+
+            SL_pid.setSetpoint(goal_vx);
+            double vx_now = (controller.getSpeedL() + controller.getSpeedR()) * 0.1 / 2;
+            double vx_out = SL_pid.compute(vx_now);
+
+            double pwm_l = (vx_out + vxVib_out);
+            double pwm_r = (vx_out + vxVib_out);
+            double temp = std::max(std::abs(pwm_l), std::abs(pwm_r));
+            if (temp > 1)
+            {
+                pwm_l /= temp;
+                pwm_r /= temp;
+            }
+            controller.setPWM(pwm_l * 3500, pwm_r * 3500, PWM_PL * 3500, PWM_PR * 3500);
+
+            wxVib_pid.setSetpoint(0);
+            double roll_w = imu948.angular_vel_x;
+            double wxVib_out = 0;//wxVib_pid.compute(roll_w);
+
+            double tilt = wxVib_out + goal_tilt;
+            int16_t tiltAngle = tilt * (4095 / 6.28) + 2047;
+
+            sm_st.WritePos(1, tiltAngle, 100, 500);
+        }
+        break;
         case 3:
             break;
         }

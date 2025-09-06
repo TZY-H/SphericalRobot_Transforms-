@@ -78,14 +78,13 @@ int main()
 
     std::cout << "UDP服务器启动，监听端口 5353" << std::endl;
 
-
     SProbot robot;
     robot.init("/dev/ttyS5", 500000,
                "/dev/ttyS1", 115200,
                "/dev/ttyS2", 500000);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     robot.start();
-    robot.mod = 1;
+    robot.mod = 2;
     // robot.goal_vx = 0;
     // robot.goal_wz = 0.5;
     // double scale = 3500;
@@ -101,7 +100,9 @@ int main()
             updata_key = 0;
             robot.goal_vx = speed_X;
             robot.goal_wz = speed_R;
-
+            robot.PWM_PL = speed_P;
+            robot.PWM_PR = 0.9 * speed_P;
+            robot.goal_tilt = tilt;
             // int16_t PWM_WL = (int16_t)(speed_X * scale);
             // int16_t PWM_WR = (int16_t)(speed_X * scale);
             // if (mod) // mod=0球形态
@@ -128,7 +129,6 @@ int main()
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-
 
     robot.stop();
     return 0;
